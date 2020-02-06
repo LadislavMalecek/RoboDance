@@ -35,12 +35,110 @@ class Motor : public Servo {
     int _dir;
 };
 
-
-
 #define NAVIGATION_LEFT 0
 #define NAVIGATION_STRAIGHT 1
 #define NAVIGATION_RIGHT 2
 #define NAVIGATION_BACK 3
+
+#define DIRECTION_NORTH = 0
+#define DIRECTION_EAST = 1
+#define DIRECTION_SOUTH = 2
+#define DIRECTION_WEST = 3
+
+
+// ----------------------------------------------------------------------------
+// ------------------------- CHOREOGRAPHY PARSER ------------------------------
+// ----------------------------------------------------------------------------
+class ChoreographyParser {
+  // direction 0 represents NORTH
+  // direciton 1 represents WEST
+  // direciton 2 represents SOUTH
+  // direciton 3 represents EAST
+  private:
+    int current_orientation = 0;
+    int current_possition_x = 0;
+    int current_possition_y = 0;
+
+    byte instructions_direction[500];
+    int instructions_time[500];
+    
+    byte starting_orientation = 0;
+    byte starting_possition_x = 0;
+    byte starting_possition_y = 0;
+
+
+    String get_next_line(String string, int &current_possition){
+      int start_possition = current_possition;
+      int end_possition = current_possition;
+      bool have_value = false;
+      while(string.length() - 1 <= current_possition){
+        // parse with \n \r, skip the trailing ones
+        if(string[current_possition] == '\n' || string[current_possition] == '\r'){
+          if(!have_value){
+            end_possition = current_possition - 1;
+            have_value = true;
+          }
+        } else {
+          if(have_value){
+            break;
+          }
+        }
+        current_possition++;
+      }
+      // if end of the file
+      if(!have_value){
+        end_possition = current_possition;
+      }
+      if(end_possition == start_possition){
+        return "";
+      }
+      return string.substring(init_possition, end_possition);
+    }
+
+    void parse_first_line(String line){
+      starting_possition_x = line[0] - 'a';
+      starting_possition_y = line[1] - '1';
+
+      switch(line[3]){
+        case 'n':
+          starting_orientation = DIRECTION_NORTH;
+          Serial.write("Starting possition dir: north");
+          break;
+        case 'e':
+          starting_orientation = DIRECTION_EAST;
+          Serial.write("Starting possition dir: east");
+          break;
+        case 's':
+          starting_orientation = DIRECTION_SOUTH;
+          Serial.write("Starting possition dir: south");
+          break;
+        case 'w':
+          starting_orientation = DIRECTION_WEST;
+          Serial.write("Starting possition dir: west");
+          break;
+        default Serial.write("Invalid starting direction encountered.");
+      }
+      Serial.write("Starting possition x: " + starting_possition_x);
+      Serial.write("Starting possition y: " + starting_possition_y);
+
+      current_orientation = starting_orientation;
+      current_possition_x = starting_possition_x;
+      current_possition_y = starting_possition_y;
+    }
+
+    void parse_line(String line){
+
+    }
+
+  public:
+    void parse(String choreography){
+
+    }
+}
+
+// ----------------------------------------------------------------------------
+// ----------------------------- NAVIGATION -----------------------------------
+// ----------------------------------------------------------------------------
 
 // Navigation part of the robot
 // it translates the global instructions to local robot-centric ones
@@ -56,19 +154,40 @@ class Motor : public Servo {
 // time
 // rotate in the direction and leave the cross at the time
 class Navigation {
-  private:
-    // direction 0 represents NORTH
-    // direciton 1 represents WEST
-    // direciton 2 represents SOUTH
-    // direciton 3 represents EAST
-    
+  private:    
     int current_direction = 0;
     int current_navigation_instruction = 0;
     
     int parsed_timesteps[100];
     byte parsed_instructions[100];
 
-    void parse_string_choreography(String choreography){ }
+    
+
+    void parse_string_choreography(String choreography){
+
+
+      
+      choreography.toLowerCase();
+      bool is_first_line = true;
+      bool finished = false;
+      int current_possition = 0;
+      while(!finished){
+        String line = get_next_line(choreography, current_possition);
+        is_first_line = false;
+        if(is_first_line){
+          parse_first_line(line);
+          is_first_line = false;
+        } else {
+          parse_line(line);
+        }
+      }
+
+
+      for(int i == 0; i < choreography.length(); i++){
+        char = choreography[i];
+
+      }
+    }
 
     
     
@@ -114,7 +233,12 @@ class Navigation {
     }
 }
 
-motor leftMotor, rightMotor;
+
+// ----------------------------------------------------------------------------
+// ------------------------------- ROBOT LOGICS -------------------------------
+// ----------------------------------------------------------------------------
+
+Motor leftMotor, rightMotor;
 Navigation nav;
 
 unsigned long current_time = 0;
@@ -236,9 +360,6 @@ void turn_back() {
   // TODO - proper delay
   stopCargo();
 }
-
-
-
 
 
 // ----------------------------------------------------------------------------
