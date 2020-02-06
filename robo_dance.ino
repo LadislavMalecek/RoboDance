@@ -369,8 +369,8 @@ void turn_90_right() {
 }
 
 void turn_back() {
-  turnLeft();
-  // TODO - proper delay
+  turn_90_left();
+  turn_90_left();
   stopCargo();
 }
 
@@ -386,12 +386,20 @@ void control_waiting_start(){
 }
 
 void control_go_to_next_crossing(unsigned long current_time){
+
+  // Go straight for some time to be centered on the cross.
   if (border_left == BLACK || border_right == BLACK) {
-    int time = ;
-    // Go straight for some time to be centered on the cross
-    while ()
-    
-    state = control_navigation_on_crossing;
+    int previous_time = current_time;
+    bool cargo_centered = false;
+    while (!cargo_centered) {
+      straight();
+
+      // Loop straight() for 500 milliseconds, then change state
+      if (current_time-previous_time > 500) {
+        state = control_navigation_on_crossing;
+        cargo_centered = true;
+      }
+    }
   }
   
   if (middle_left == BLACK) {
