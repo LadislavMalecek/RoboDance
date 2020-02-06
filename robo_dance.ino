@@ -4,6 +4,8 @@
 #define STATE_GO_TO_NEXT_CROSSING 1
 #define STATE_NAVIGATION_ON_CROSSING 2
 #define STATE_FINAL 3
+#define STATE_NORMAL_OPERATION 4
+
 
 #define LEFT 12
 #define RIGHT 13
@@ -23,7 +25,7 @@ class Motor : public Servo {
   public:
     Motor(void) { _dir=1; }
     void go (int percentage) {
-      writeMicroseconds(1500+_dir*percentage*2);
+      writeMicroseconds(1500 + _dir * percentage * 2);
     }
     void setDirection(bool there) {
       if(there)
@@ -40,10 +42,10 @@ class Motor : public Servo {
 #define NAVIGATION_RIGHT 2
 #define NAVIGATION_BACK 3
 
-#define DIRECTION_NORTH = 0
-#define DIRECTION_EAST = 1
-#define DIRECTION_SOUTH = 2
-#define DIRECTION_WEST = 3
+#define DIRECTION_NORTH 0
+#define DIRECTION_EAST 1
+#define DIRECTION_SOUTH 2
+#define DIRECTION_WEST 3
 
 
 // ----------------------------------------------------------------------------
@@ -55,86 +57,109 @@ class ChoreographyParser {
   // direciton 2 represents SOUTH
   // direciton 3 represents EAST
   private:
-    int current_orientation = 0;
-    int current_possition_x = 0;
-    int current_possition_y = 0;
+    unsigned int next_orientation = 0;
+    unsigned int next_possition_x = 0;
+    unsigned int next_possition_y = 0;
 
-    byte instructions_direction[500];
-    int instructions_time[500];
-    
-    byte starting_orientation = 0;
-    byte starting_possition_x = 0;
-    byte starting_possition_y = 0;
+    unsigned int current_orientation = 0;
+    unsigned int current_possition_x = 0;
+    unsigned int current_possition_y = 0;
 
+    byte instructions_direction[200];
+    unsigned int instructions_time[200];
 
-    String get_next_line(String string, int &current_possition){
-      int start_possition = current_possition;
-      int end_possition = current_possition;
-      bool have_value = false;
-      while(string.length() - 1 <= current_possition){
-        // parse with \n \r, skip the trailing ones
-        if(string[current_possition] == '\n' || string[current_possition] == '\r'){
-          if(!have_value){
-            end_possition = current_possition - 1;
-            have_value = true;
-          }
-        } else {
-          if(have_value){
-            break;
-          }
-        }
-        current_possition++;
+    unsigned int current_string_possition = 0;
+
+    String choreography = "";
+
+    void skip_newline_chars(){
+      while(choreography[current_string_possition] == '\n' || choreography[current_string_possition] == '\r'){
+        current_string_possition++;
       }
-      // if end of the file
-      if(!have_value){
-        end_possition = current_possition;
-      }
-      if(end_possition == start_possition){
-        return "";
-      }
-      return string.substring(init_possition, end_possition);
     }
 
     void parse_first_line(String line){
-      starting_possition_x = line[0] - 'a';
-      starting_possition_y = line[1] - '1';
+      next_possition_x = line[0] - 'a';
+      next_possition_y = line[1] - '1';
 
       switch(line[3]){
         case 'n':
-          starting_orientation = DIRECTION_NORTH;
-          Serial.write("Starting possition dir: north");
+          next_orientation = DIRECTION_NORTH;
+          Serial.println("Starting possition dir: north");
           break;
         case 'e':
-          starting_orientation = DIRECTION_EAST;
-          Serial.write("Starting possition dir: east");
+          next_orientation = DIRECTION_EAST;
+          Serial.println("Starting possition dir: east");
           break;
         case 's':
-          starting_orientation = DIRECTION_SOUTH;
-          Serial.write("Starting possition dir: south");
+          next_orientation = DIRECTION_SOUTH;
+          Serial.println("Starting possition dir: south");
           break;
         case 'w':
-          starting_orientation = DIRECTION_WEST;
-          Serial.write("Starting possition dir: west");
+          next_orientation = DIRECTION_WEST;
+          Serial.println("Starting possition dir: west");
           break;
-        default Serial.write("Invalid starting direction encountered.");
+        default:
+          Serial.println("Invalid starting direction encountered.");
+          break;
       }
-      Serial.write("Starting possition x: " + starting_possition_x);
-      Serial.write("Starting possition y: " + starting_possition_y);
+      Serial.println("Starting possition x: " + next_possition_x);
+      Serial.println("Starting possition y: " + next_possition_y);
 
-      current_orientation = starting_orientation;
-      current_possition_x = starting_possition_x;
-      current_possition_y = starting_possition_y;
+      current_orientation = next_orientation;
+      current_possition_x = next_possition_x;
+      current_possition_y = next_possition_y;
     }
 
     void parse_line(String line){
 
     }
 
-  public:
-    void parse(String choreography){
+    String get_next_line(){
+      int start_possition = current_string_possition;
+      int end_possition = 0;
+      
+      // Serial.println("Before cycle");
+      // Serial.println(choreography.length());
+      
+      while(choreography.length() - 1 >= current_string_possition){
 
+        // Serial.println("X");
+        // Serial.println("Current char: " + choreography[current_string_possition]);
+        // parse with \n \r, skip the trailing ones
+        if(choreography[current_string_possition] == '\n' || choreography[current_string_possition] == '\r'){
+          end_possition = current_string_possition - 1;
+          skip_newline_chars();
+          break;
+        }
+        current_string_possition++;
+      }
+      // if end of the file
+      if(end_possition == 0){
+        end_possition = current_string_possition;
+      }
+      if(end_possition == start_possition){
+        return "";
+      }
+      return choreography.substring(start_possition, end_possition + 1);
     }
-}
+
+
+  public:
+    void parse(String choreography_string){
+      // Serial.println("entered parse");
+      choreography = choreography_string;
+      // Serial.println("before string create");
+
+      String next_line = String("_");
+      // Serial.println("before get_next_line");
+      next_line = get_next_line();
+      while(next_line != ""){
+        Serial.println("Next line: " + next_line);
+        next_line = get_next_line();
+      }
+    }
+};
 
 // ----------------------------------------------------------------------------
 // ----------------------------- NAVIGATION -----------------------------------
@@ -160,33 +185,17 @@ class Navigation {
     
     int parsed_timesteps[100];
     byte parsed_instructions[100];
+    byte current_step = 0;
+    byte number_of_steps = 0;
 
     
 
     void parse_string_choreography(String choreography){
-
-
-      
+      Serial.println("entering parse_string_choreography");
       choreography.toLowerCase();
-      bool is_first_line = true;
-      bool finished = false;
-      int current_possition = 0;
-      while(!finished){
-        String line = get_next_line(choreography, current_possition);
-        is_first_line = false;
-        if(is_first_line){
-          parse_first_line(line);
-          is_first_line = false;
-        } else {
-          parse_line(line);
-        }
-      }
-
-
-      for(int i == 0; i < choreography.length(); i++){
-        char = choreography[i];
-
-      }
+      Serial.println("creating parser");
+      ChoreographyParser parser = ChoreographyParser();
+      parser.parse(choreography);
     }
 
     
@@ -195,11 +204,29 @@ class Navigation {
 
     // not implemented yet, just call it once at the start of the run
     void init_preload_choreography(){
-      return;
+      init_preload_choreography(0);
     }
     // not implemented yet, call this if you want to initialize a specific choreography
     void init_preload_choreography(int i){
-      return;
+      // String choreography_0 = "A1N\nc2 t120\nd4 t0\nb5 t0\na2 t368\ne2 t452\n1c t0\ne1 t600";
+      // Serial.println("preload choreography with:");
+      // Serial.println(choreography_0);
+      // parse_string_choreography(choreography_0);
+
+      parsed_timesteps[0] = 0;
+      parsed_timesteps[1] = 10000;
+      parsed_timesteps[2] = 20000;
+      parsed_timesteps[3] = 30000;
+      parsed_timesteps[4] = 40000;
+
+      parsed_instructions[0] = NAVIGATION_LEFT;
+      parsed_instructions[1] = NAVIGATION_STRAIGHT;
+      parsed_instructions[2] = NAVIGATION_STRAIGHT;
+      parsed_instructions[3] = NAVIGATION_BACK;
+      parsed_instructions[4] = NAVIGATION_RIGHT;
+
+      number_of_steps = 5;
+
     }
     // returns the total number of available preloaded choreographies
     int number_of_preloaded_choreographies(){
@@ -217,21 +244,25 @@ class Navigation {
     // gets one of LEFT, RIGHT, STRAIGHT, BACK
     // what to do on the current cross
     int get_cross_direction(){
-      return LEFT;      
+      return parsed_instructions[current_step];
+      // return LEFT;      
     }
 
     // returns the absolute timestamp in miliseconds
     // get the time at which we should leave the current cross
     int get_cross_leave_time(){
-      return 10202; // this is something more than 10 seconds
+      return parsed_timesteps[current_step];
+      // return 10202; // this is something more than 10 seconds
     }
     
     // move navigation to next instruction
     // signal that the navigation on this cross was completed and update the orientation
-    move_to_next_instruction(){
-      return;
+    bool move_to_next_instruction(){
+      if(current_step < number_of_steps){
+        current_step++;
+      }
     }
-}
+};
 
 
 // ----------------------------------------------------------------------------
