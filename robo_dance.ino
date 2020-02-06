@@ -257,7 +257,7 @@ int right_wheel_velocity = 0;
 int lastButtonState = LOW;
 int ledState = HIGH;
 
-int state = STATE_NORMAL_OPERATION;
+int state = STATE_WAITING_START;
 
 void read_inputs() {
   middle = digitalRead(MIDDLE);
@@ -381,8 +381,11 @@ void turn_back() {
 
 void control_waiting_start(){
   stopCargo();
-  state = STATE_GO_TO_NEXT_CROSSING;
-  start_dance_time = millis();
+  // if BUTTON == LOW
+  if (button == 0) {
+    state = STATE_GO_TO_NEXT_CROSSING;
+    start_dance_time = millis();
+  }
 }
 
 void control_go_to_next_crossing(unsigned long current_time){
@@ -396,7 +399,7 @@ void control_go_to_next_crossing(unsigned long current_time){
 
       // Loop straight() for 500 milliseconds, then change state
       if (current_time-previous_time > 500) {
-        state = control_navigation_on_crossing;
+        state = STATE_NAVIGATION_ON_CROSSING;
         cargo_centered = true;
       }
     }
@@ -431,7 +434,7 @@ void control_navigation_on_crossing(unsigned long current_time){
       turn_back();
       break;
   }
-  state = control_go_to_next_crossing;
+  state = STATE_GO_TO_NEXT_CROSSING;
 }
 
 void control_final() {
