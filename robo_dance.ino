@@ -337,21 +337,34 @@ void set_velocities() {
 }
 
 void turn_90_left() {
-  // alternative - rotate till the middle sensor sees black
-  bool was_white = false;
-  turnLeft();
-  while (true) {
-
+  // Rotate till the middle sensor sees black
+  bool turn_complete = false;
+  bool close_to_end = false;
+  while (!turn_complete) {
+    turnLeft();
+    if (middle_right == BLACK) {
+      close_to_end = true;
+    }
+    if (close_to_end && middle == BLACK) {
+      turn_complete = true;
+    }
   }
-
-  turnLeft();
-  // TODO - proper delay
   stopCargo();
 }
 
 void turn_90_right() {
-  turnRight();
-  // TODO - proper delay
+  // Rotate till the middle sensor sees black
+  bool turn_complete = false;
+  bool close_to_end = false;
+  while (!turn_complete) {
+    turnRight();
+    if (middle_left == BLACK) {
+      close_to_end = true;
+    }
+    if (close_to_end && middle == BLACK) {
+      turn_complete = true;
+    }
+  }
   stopCargo();
 }
 
@@ -374,7 +387,9 @@ void control_waiting_start(){
 
 void control_go_to_next_crossing(unsigned long current_time){
   if (border_left == BLACK || border_right == BLACK) {
+    int time = ;
     // Go straight for some time to be centered on the cross
+    while ()
     
     state = control_navigation_on_crossing;
   }
