@@ -20,6 +20,7 @@
 #define BLACK 0
 #define WHITE 1
 
+bool serialLog = false;
 
 class Motor : public Servo {
   public:
@@ -48,6 +49,21 @@ class Motor : public Servo {
 #define DIRECTION_SOUTH 2
 #define DIRECTION_WEST 3
 
+String direction_to_string(byte direction){
+  switch (direction){
+  case DIRECTION_NORTH:
+    return "North";
+  case DIRECTION_EAST:
+    return "East";
+  case DIRECTION_SOUTH:
+    return "South";
+  case DIRECTION_WEST:
+    return "West";
+  default:
+    return "UNKNOWN DIRECTION";
+  }
+}
+
 
 // ----------------------------------------------------------------------------
 // ------------------------- CHOREOGRAPHY PARSER ------------------------------
@@ -58,16 +74,26 @@ class ChoreographyParser {
   // direciton 2 represents SOUTH
   // direciton 3 represents EAST
   private:
-    unsigned int next_orientation = 0;
-    unsigned int next_possition_x = 0;
-    unsigned int next_possition_y = 0;
+    // unsigned int next_orientation = 0;
+    // unsigned int next_possition_x = 0;
+    // unsigned int next_possition_y = 0;
 
-    unsigned int current_orientation = 0;
-    unsigned int current_possition_x = 0;
-    unsigned int current_possition_y = 0;
+    // int next_time = 0;
+    // bool preffer_column = true;
 
-    byte instructions_direction[200];
-    unsigned int instructions_time[200];
+    // unsigned int current_orientation = 0;
+    // unsigned int current_possition_x = 0;
+    // unsigned int current_possition_y = 0;
+
+    byte number_of_instructions = 0;
+
+    byte instructions_direction_x[64];
+    byte instructions_direction_y[64];
+    int instructions_time[64];
+    bool instructions_preffer_col[64];
+
+    byte start_x, start_y = 0;
+    byte start_orientation = 0;
 
     unsigned int current_string_possition = 0;
 
@@ -79,41 +105,74 @@ class ChoreographyParser {
       }
     }
 
-    void parse_first_line(String line){
-      next_possition_x = line[0] - 'a';
-      next_possition_y = line[1] - '1';
+    // void copy_next_to_current(){
+    //   current_orientation = next_orientation;
+    //   current_possition_x = next_possition_x;
+    //   current_possition_y = next_possition_y;
+    // }
 
-      switch(line[3]){
+    void parse_first_line(String line){
+      start_x = line[0] - 'a';
+      start_y = line[1] - '1';
+
+      switch(line[2]){
         case 'n':
-          next_orientation = DIRECTION_NORTH;
-          //Serial.println("Starting possition dir: north");
+        case 'N':
+          start_orientation = DIRECTION_NORTH;
+          // Serial.println("Starting possition dir: north");
           break;
         case 'e':
-          next_orientation = DIRECTION_EAST;
-          //Serial.println("Starting possition dir: east");
+        case 'E':
+          start_orientation = DIRECTION_EAST;
+          // Serial.println("Starting possition dir: east");
           break;
         case 's':
-          next_orientation = DIRECTION_SOUTH;
-          //Serial.println("Starting possition dir: south");
+        case 'S':
+          start_orientation = DIRECTION_SOUTH;
+          // Serial.println("Starting possition dir: south");
           break;
         case 'w':
-          next_orientation = DIRECTION_WEST;
-          //Serial.println("Starting possition dir: west");
+        case 'W':
+          start_orientation = DIRECTION_WEST;
+          // Serial.println("Starting possition dir: west");
           break;
         default:
-          //Serial.println("Invalid starting direction encountered.");
+          // Serial.println("Invalid starting direction encountered.");
           break;
       }
-      //Serial.println("Starting possition x: " + next_possition_x);
-      //Serial.println("Starting possition y: " + next_possition_y);
+      // Serial.println("Starting possition x: " + start_x);
+      // Serial.println("Starting possition y: " + start_y);
 
-      current_orientation = next_orientation;
-      current_possition_x = next_possition_x;
-      current_possition_y = next_possition_y;
+      // start_x = next_orientation;
+      // current_possition_x = next_possition_x;
+      // current_possition_y = next_possition_y;
     }
 
     void parse_line(String line){
+      // copy_next_to_current();
+      // check if the first one is number
+      if (isdigit(line[0]))
+      {
+        instructions_preffer_col[number_of_instructions] = false;
+        instructions_direction_x[number_of_instructions] = line[1] - 'a';
+        instructions_direction_y[number_of_instructions]  = line[0] - '1';
+      }
+      else
+      {
+        instructions_preffer_col[number_of_instructions] = true;
+        instructions_direction_x[number_of_instructions]  = line[0] - 'a';
+        instructions_direction_y[number_of_instructions]  = line[1] - '1';
+      }
 
+      if(serialLog){
+        Serial.print("TIME RAW: '");
+        Serial.print(line.substring(4, line.length()));
+        Serial.print("', PARSED: ");
+        Serial.println(line.substring(4, line.length()).toInt());
+      }
+
+      instructions_time[number_of_instructions] = line.substring(4, line.length()).toInt();
+      number_of_instructions++;
     }
 
     String get_next_line(){
@@ -155,10 +214,62 @@ class ChoreographyParser {
       String next_line = String("_");
       // Serial.println("before get_next_line");
       next_line = get_next_line();
+      parse_first_line(next_line);
+      next_line = get_next_line();
       while(next_line != ""){
-        //Serial.println("Next line: " + next_line);
+        // Serial.println("Next line: " + next_line);
+        parse_line(next_line);
         next_line = get_next_line();
       }
+
+      if(serialLog){
+        Serial.print("startO: ");
+        Serial.println(start_orientation);
+        Serial.print("startX: ");
+        Serial.println(start_x);
+        Serial.print("startY: ");
+        Serial.println(start_y);
+        for (byte i = 0; i < number_of_instructions; i++)
+        {
+          Serial.println();
+          Serial.print("X: ");
+          Serial.print(instructions_direction_x[i]);
+          Serial.print(", Y: ");
+          Serial.print(instructions_direction_y[i]);
+          Serial.print(", T: ");
+          Serial.print(instructions_time[i]);
+          Serial.print(", P: ");
+          Serial.print(instructions_preffer_col[i]);
+        }
+        Serial.println();
+      }
+
+    }
+
+    byte get_start_x(){
+      return start_x;
+    }
+    byte get_start_y(){
+      return start_y;
+    }
+    byte get_start_orientation(){
+      return start_orientation;
+    }
+    byte get_number_of_instructions(){
+      return number_of_instructions;
+    }
+
+    byte get_instructions_x(byte i){
+      return instructions_direction_x[i];
+    }
+    byte get_instructions_y(byte i){
+      return instructions_direction_y[i];
+    }
+    bool get_instructions_pref_col(byte i){
+      return instructions_preffer_col[i];
+    }
+    int get_instructions_time(byte i){
+      return instructions_time[i];
     }
 };
 
@@ -180,41 +291,171 @@ class ChoreographyParser {
 // time
 // rotate in the direction and leave the cross at the time
 class Navigation {
-  private:    
-    int current_direction = 0;
-    int current_navigation_instruction = 0;
-    
-    int parsed_timesteps[100];
-    byte parsed_instructions[100];
-    byte current_step = 0;
-    byte number_of_steps = 0;
+  private:
+    ChoreographyParser parser;
+    byte current_parser_instruction = -1;
+    byte current_direction = 0;
+    byte current_x = 0;
+    byte current_y = 0;
 
+    byte next_x = 0;
+    byte next_y = 0;
+    int next_time = 0;
+    byte next_direction = 0;
+    bool next_x_first = true;
     
+    bool move_to_next_parser_instruction(){
+      if(serialLog){
+        Serial.print("MOVING TO NEXT instruction: ");
+      }
 
-    void parse_string_choreography(String choreography){
-      //Serial.println("entering parse_string_choreography");
-      choreography.toLowerCase();
-      //Serial.println("creating parser");
-      ChoreographyParser parser = ChoreographyParser();
-      parser.parse(choreography);
+      if(current_parser_instruction == (parser.get_number_of_instructions() - 1)){
+        if(serialLog){
+          Serial.println("FINISHED");
+        }
+        return false;
+      }
+      current_parser_instruction++;
+      if(serialLog){
+        Serial.println(current_parser_instruction);
+      }
+      next_x = parser.get_instructions_x(current_parser_instruction);
+      next_y = parser.get_instructions_y(current_parser_instruction);
+      next_time = parser.get_instructions_time(current_parser_instruction);
+      next_x_first = parser.get_instructions_pref_col(current_parser_instruction);
+      if(serialLog){
+        Serial.print("nextX: ");
+        Serial.print(next_x);
+        Serial.print(" , nextY: ");
+        Serial.print(next_y);
+        Serial.print(", nextTime: ");
+        Serial.print(next_time);
+        Serial.print(" xFirst: ");
+        Serial.println(next_x_first);
+      }
+      return true;
     }
 
-    
+    void parse_string_choreography(String choreography){
+      choreography.toLowerCase();
+      parser = ChoreographyParser();
+      parser.parse(choreography);
+
+      current_x = parser.get_start_x();
+      current_y = parser.get_start_y();
+      current_direction = parser.get_start_orientation();
+      current_parser_instruction = -1;
+      move_to_next_parser_instruction();
+    }
+
+    void update_possition(){
+      if(next_direction == DIRECTION_NORTH){
+        current_y++;
+      }
+      if(next_direction == DIRECTION_SOUTH){
+        current_y--;
+      }
+      if(next_direction == DIRECTION_WEST){
+        current_x--;
+      }
+      if(next_direction == DIRECTION_EAST){
+        current_x++;
+      }
+      current_direction = next_direction;
+      if(serialLog){
+        Serial.print("New possition: ");
+        Serial.print(current_x);
+        Serial.print(" ");
+        Serial.println(current_y);
+      }
+    }
+
+    bool is_finished_current_parser_instruction(){
+      return current_x == next_x && current_y == next_y;
+    }
+
+    byte get_move_absolute_direction(){
+      if(next_x_first){
+        if(next_x != current_x){
+          return get_move_x_absolute_direction();
+        } else {
+          return get_move_y_absolute_direction();
+        }
+      } else {
+        if(next_y != current_y){
+          return get_move_y_absolute_direction();
+        } else {
+          return get_move_x_absolute_direction();
+        }
+      }
+    }
+
+    byte get_move_x_absolute_direction(){
+      if(current_x < next_x){
+        return DIRECTION_EAST;
+      } else {
+        return DIRECTION_WEST;
+      }
+    }
+    byte get_move_y_absolute_direction(){
+      if(current_y < next_y){
+        return DIRECTION_NORTH;
+      } else {
+        return DIRECTION_SOUTH;
+      }
+    }
+
+    bool is_same_direction(byte dir1, byte dir2){
+      return dir1 == dir2;
+    }
+
+    bool is_opposite_direction(byte dir1, byte dir2){
+      return ((dir1 - dir2 + 4) % 4) == 2;
+    }
+
+    bool is_left_direction(byte dir1, byte dir2){
+      return ((dir1 - dir2 + 4) % 4) == 1;
+    }
+
+    bool is_right_direction(byte dir1, byte dir2){
+      return ((dir1 - dir2 + 4) % 4) == 3;
+    }
+
+    byte get_move_robot_local_direction(){
+      next_direction = get_move_absolute_direction();
+      if(serialLog){
+        Serial.print("Current direction: ");
+        Serial.print(direction_to_string(current_direction));
+        Serial.print(", next direction: ");
+        Serial.println(direction_to_string(next_direction));
+      }
+
+      if(is_same_direction(current_direction, next_direction)){
+        return NAVIGATION_STRAIGHT;
+      }
+
+      if(is_opposite_direction(current_direction, next_direction)){
+        return NAVIGATION_BACK;
+      }
+
+      if(is_left_direction(current_direction, next_direction)){
+        return NAVIGATION_LEFT;
+      }
+
+      if(is_right_direction(current_direction, next_direction)){
+        return NAVIGATION_RIGHT;
+      }
+    }
     
   public:
 
-    // not implemented yet, just call it once at the start of the run
     void init_preload_choreography(){
       init_preload_choreography(0);
     }
-    // not implemented yet, call this if you want to initialize a specific choreography
     void init_preload_choreography(int i){
-      // String choreography_0 = "A1N\nc2 t120\nd4 t0\nb5 t0\na2 t368\ne2 t452\n1c t0\ne1 t600";
-      // Serial.println("preload choreography with:");
-      // Serial.println(choreography_0);
-      // parse_string_choreography(choreography_0);
-
-
+      // String choreography_0 = "B2S\nc2 t120\nd4 t0\nb5 t0\na2 t368\ne2 t452\n1c t0\ne1 t600";
+      String choreography_0 = "A1N\nb2 t120\nc3 t0";
+      parse_string_choreography(choreography_0);
     }
     // returns the total number of available preloaded choreographies
     int number_of_preloaded_choreographies(){
@@ -231,28 +472,26 @@ class Navigation {
     
     // gets one of LEFT, RIGHT, STRAIGHT, BACK
     // what to do on the current cross
-    int get_cross_direction(){
-      return parsed_instructions[current_step];
-      // return LEFT;      
+    byte get_cross_direction(){
+      // return parsed_instructions[current_step];
+      return get_move_robot_local_direction();   
     }
 
     // returns the absolute timestamp in miliseconds
     // get the time at which we should leave the current cross
     int get_cross_leave_time(){
-      return parsed_timesteps[current_step];
-      // return 10202; // this is something more than 10 seconds
+      return next_time;
     }
     
     // move navigation to next instruction
     // signal that the navigation on this cross was completed and update the orientation
-    // returns false if the whole sequence is completed
+    // return false if the whole sequence is completed
     bool move_to_next_instruction(){
-      if(current_step < (number_of_steps -1)){
-        current_step++;
-        return true;
-      } else {
-        return false;
+      update_possition();
+      if(is_finished_current_parser_instruction()){
+        return move_to_next_parser_instruction();
       }
+      return true;
     }
 };
 
@@ -262,7 +501,7 @@ class Navigation {
 // ----------------------------------------------------------------------------
 
 Motor leftMotor, rightMotor;
-Navigation nav;
+Navigation navigation;
 
 unsigned long current_time = 0;
 unsigned long start_dance_time = 0;
@@ -291,7 +530,44 @@ void read_inputs() {
   button = !digitalRead(BUTTON);
 }
 
+
+void printout_choreography_execute(){
+  bool finished = false;
+  Serial.println("Local instructions:");
+
+  while(!finished){
+    byte direction = navigation.get_cross_direction();
+    int time = navigation.get_cross_leave_time();
+    if(serialLog){
+      switch (direction){
+        case NAVIGATION_STRAIGHT:
+          Serial.print("straight");
+          break;
+        case NAVIGATION_BACK:
+          Serial.print("back");
+          break;
+        case NAVIGATION_LEFT:
+          Serial.print("left");
+          break;
+        case NAVIGATION_RIGHT:
+          Serial.print("right");
+          break;
+        default:
+          Serial.println("ERROR");
+          break;
+      }
+      Serial.print(", time: ");
+      Serial.println(time);
+    }
+    finished = !navigation.move_to_next_instruction();
+  }
+}
+
+
 void setup() {
+  navigation = Navigation();
+  navigation.init_preload_choreography();
+
   leftMotor.attach(LEFT, 500, 2500);
   leftMotor.setDirection(true);
   rightMotor.attach(RIGHT, 500, 2500);
@@ -450,9 +726,9 @@ void control_navigation_on_crossing(unsigned long current_time){
     delay(timestamp - current_time);
   }
   */
-  int instruction = nav.get_cross_direction();
+  int instruction = navigation.get_cross_direction();
 
-  if (!nav.move_to_next_instruction()) {
+  if (!navigation.move_to_next_instruction()) {
     switch(instruction) {
       case NAVIGATION_LEFT:
         turn_90_left();
