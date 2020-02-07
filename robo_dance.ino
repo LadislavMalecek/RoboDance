@@ -25,7 +25,7 @@ bool serialLog = false;
 class Motor : public Servo {
   public:
     Motor(void) { _dir=1; }
-    byte correction = 0;
+    byte correction = 7;
     void go (int percentage) {
       writeMicroseconds((1500 - correction)+ _dir * percentage * 2);
     }
@@ -454,7 +454,7 @@ class Navigation {
     }
     void init_preload_choreography(int i){
       // String choreography_0 = "B2S\nc2 t120\nd4 t0\nb5 t0\na2 t368\ne2 t452\n1c t0\ne1 t600";
-      String choreography_0 = "C2N\nc1 t30\nb3 t60\nb2 t90\nc2 t120\nc1 t150\nb3 t180\nb2 t210\nc2 t240";
+      String choreography_0 = "A1N\n3a t30\nb2 t60\nc4 t90\nd3 t120\ne5 t180";
       parse_string_choreography(choreography_0);
     }
     // returns the total number of available preloaded choreographies
@@ -635,41 +635,85 @@ void set_velocities() {
   rightMotor.go(right_wheel_velocity);
 }
 
+// void turn_90_left() {
+//   left_wheel_velocity = -25;
+//   right_wheel_velocity = 25;
+//   set_velocities();
+
+//   // Rotate till the middle sensor sees black
+//   bool turn_complete = false;
+//   bool check = true;
+//   while (!turn_complete) {
+//     read_inputs();
+//     if (middle_left == BLACK) {
+//       delay(300);
+//       stopCargo();
+//       turn_complete = true;
+//     }
+//   }
+// }
+
 void turn_90_left() {
   left_wheel_velocity = -25;
   right_wheel_velocity = 25;
   set_velocities();
 
-  // Rotate till the middle sensor sees black
-  bool turn_complete = false;
-  bool check = true;
-  while (!turn_complete) {
-    read_inputs();
-    if (middle_left == BLACK) {
-      delay(325);
-      stopCargo();
-      turn_complete = true;
-    }
-  }
+  rotate();
 }
+
+// void turn_90_right() {
+//   left_wheel_velocity = 25;
+//   right_wheel_velocity = -25;
+//   set_velocities();
+
+//   // Rotate till the middle sensor sees black
+//   bool turn_complete = false;
+//   bool check = true;
+//   while (!turn_complete) {
+//     read_inputs();
+//     if (middle_right == BLACK) {
+//       delay(300);
+//       stopCargo();
+//       turn_complete = true;
+//     }
+//   }
+// }
 
 void turn_90_right() {
   left_wheel_velocity = 25;
   right_wheel_velocity = -25;
   set_velocities();
 
+  rotate();  
+}
+
+void rotate() {
   // Rotate till the middle sensor sees black
-  bool turn_complete = false;
-  bool check = true;
-  while (!turn_complete) {
+
+  digitalWrite(LED, LOW);
+  // bool close_to_end = false;
+  // while (!turn_complete) {
+  //   read_inputs();
+  //   if (!close_to_end) {
+  //     if (middle == WHITE) {
+  //       close_to_end = true;
+  //     }
+  //   } else if (middle == BLACK) {
+  //     stopCargo();
+  //     turn_complete = true;
+  //   }
+  // }
+  delay(500);
+  while (true) {
     read_inputs();
-    if (middle_right == BLACK) {
-      delay(325);
+    if (middle == BLACK) {
+      digitalWrite(LED, HIGH);
       stopCargo();
-      turn_complete = true;
+      break;
     }
   }
 }
+
 
 void turn_back() {
   turn_90_left();
@@ -703,7 +747,7 @@ void control_go_to_next_crossing(){
       // Loop straight() for 250 milliseconds, then change state
       if (millis()-previous_time > 250) {
         state = STATE_NAVIGATION_ON_CROSSING;
-        // we reached new crossing, ask the navigation for new instructions
+        //we reached new crossing, ask the navigation for new instructions
         bool success = navigation.move_to_next_instruction();
         if(!success){
           state = STATE_FINAL;
@@ -726,12 +770,13 @@ void control_go_to_next_crossing(){
 }
 
 void control_navigation_on_crossing(unsigned long current_time){
-  int timestamp = navigation.get_cross_leave_time();
-  if (timestamp > current_time) {
-    delay(timestamp - current_time);
-  }
+  // int timestamp = navigation.get_cross_leave_time();
+  // if (timestamp > current_time) {
+  //   delay(timestamp - current_time);
+  // }
 
   int instruction = navigation.get_cross_direction();
+
   switch(instruction) {
     case NAVIGATION_LEFT:
       turn_90_left();
