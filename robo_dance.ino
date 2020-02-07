@@ -25,7 +25,7 @@ bool serialLog = false;
 class Motor : public Servo {
   public:
     Motor(void) { _dir=1; }
-    byte correction = 7;
+    byte correction = 0;
     void go (int percentage) {
       writeMicroseconds((1500 - correction)+ _dir * percentage * 2);
     }
@@ -454,7 +454,7 @@ class Navigation {
     }
     void init_preload_choreography(int i){
       // String choreography_0 = "B2S\nc2 t120\nd4 t0\nb5 t0\na2 t368\ne2 t452\n1c t0\ne1 t600";
-      String choreography_0 = "A1N\nb2 t120\nc3 t0";
+      String choreography_0 = "C2N\nc3 t0\nb3 t0\nb2 t0\nc2 t0";
       parse_string_choreography(choreography_0);
     }
     // returns the total number of available preloaded choreographies
@@ -646,7 +646,7 @@ void turn_90_left() {
   while (!turn_complete) {
     read_inputs();
     if (middle_left == BLACK) {
-      delay(250);
+      delay(325);
       stopCargo();
       turn_complete = true;
     }
@@ -664,7 +664,7 @@ void turn_90_right() {
   while (!turn_complete) {
     read_inputs();
     if (middle_right == BLACK) {
-      delay(250);
+      delay(325);
       stopCargo();
       turn_complete = true;
     }
@@ -687,7 +687,7 @@ void control_waiting_start(){
   // if BUTTON == LOW
   if (button == 1) {
     start_dance_time = millis();
-    state = STATE_GO_TO_NEXT_CROSSING;
+    state = STATE_NAVIGATION_ON_CROSSING;
   }
 }
 
@@ -703,6 +703,12 @@ void control_go_to_next_crossing(){
       // Loop straight() for 250 milliseconds, then change state
       if (millis()-previous_time > 250) {
         state = STATE_NAVIGATION_ON_CROSSING;
+        // we reached new crossing, ask the navigation for new instructions
+        bool success = navigation.move_to_next_instruction();
+        if(!success){
+          state = STATE_FINAL;
+          return;
+        }
         cargo_centered = true;
       }
     }
@@ -726,26 +732,22 @@ void control_navigation_on_crossing(unsigned long current_time){
     delay(timestamp - current_time);
   }
   */
-  int instruction = navigation.get_cross_direction();
 
-  if (!navigation.move_to_next_instruction()) {
-    switch(instruction) {
-      case NAVIGATION_LEFT:
-        turn_90_left();
-        break;
-      case NAVIGATION_RIGHT:
-        turn_90_right();
-        break;
-      case NAVIGATION_STRAIGHT:
-        break;
-      case NAVIGATION_BACK:
-        turn_back();
-        break;
-    }
-    state = STATE_GO_TO_NEXT_CROSSING;
-  } else {
-    state = STATE_FINAL;
+  int instruction = navigation.get_cross_direction();
+  switch(instruction) {
+    case NAVIGATION_LEFT:
+      turn_90_left();
+      break;
+    case NAVIGATION_RIGHT:
+      turn_90_right();
+      break;
+    case NAVIGATION_STRAIGHT:
+      break;
+    case NAVIGATION_BACK:
+      turn_back();
+      break;
   }
+  state = STATE_GO_TO_NEXT_CROSSING;
 }
 
 void control_final() {
