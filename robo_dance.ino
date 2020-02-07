@@ -454,7 +454,7 @@ class Navigation {
     }
     void init_preload_choreography(int i){
       // String choreography_0 = "B2S\nc2 t120\nd4 t0\nb5 t0\na2 t368\ne2 t452\n1c t0\ne1 t600";
-      String choreography_0 = "C2N\nc3 t0\nb3 t0\nb2 t0\nc2 t0";
+      String choreography_0 = "C2N\nc1 t30\nb3 t60\nb2 t90\nc2 t120\nc1 t150\nb3 t180\nb2 t210\nc2 t240";
       parse_string_choreography(choreography_0);
     }
     // returns the total number of available preloaded choreographies
@@ -726,12 +726,10 @@ void control_go_to_next_crossing(){
 }
 
 void control_navigation_on_crossing(unsigned long current_time){
-  /*
-  int timestamp = nav.get_cross_leave_time();
+  int timestamp = navigation.get_cross_leave_time();
   if (timestamp > current_time) {
     delay(timestamp - current_time);
   }
-  */
 
   int instruction = navigation.get_cross_direction();
   switch(instruction) {
