@@ -24,8 +24,9 @@
 class Motor : public Servo {
   public:
     Motor(void) { _dir=1; }
+    byte correction = 7;
     void go (int percentage) {
-      writeMicroseconds(1500 + _dir * percentage * 2);
+      writeMicroseconds((1500 - correction)+ _dir * percentage * 2);
     }
     void setDirection(bool there) {
       if(there)
@@ -85,26 +86,26 @@ class ChoreographyParser {
       switch(line[3]){
         case 'n':
           next_orientation = DIRECTION_NORTH;
-          Serial.println("Starting possition dir: north");
+          //Serial.println("Starting possition dir: north");
           break;
         case 'e':
           next_orientation = DIRECTION_EAST;
-          Serial.println("Starting possition dir: east");
+          //Serial.println("Starting possition dir: east");
           break;
         case 's':
           next_orientation = DIRECTION_SOUTH;
-          Serial.println("Starting possition dir: south");
+          //Serial.println("Starting possition dir: south");
           break;
         case 'w':
           next_orientation = DIRECTION_WEST;
-          Serial.println("Starting possition dir: west");
+          //Serial.println("Starting possition dir: west");
           break;
         default:
-          Serial.println("Invalid starting direction encountered.");
+          //Serial.println("Invalid starting direction encountered.");
           break;
       }
-      Serial.println("Starting possition x: " + next_possition_x);
-      Serial.println("Starting possition y: " + next_possition_y);
+      //Serial.println("Starting possition x: " + next_possition_x);
+      //Serial.println("Starting possition y: " + next_possition_y);
 
       current_orientation = next_orientation;
       current_possition_x = next_possition_x;
@@ -155,7 +156,7 @@ class ChoreographyParser {
       // Serial.println("before get_next_line");
       next_line = get_next_line();
       while(next_line != ""){
-        Serial.println("Next line: " + next_line);
+        //Serial.println("Next line: " + next_line);
         next_line = get_next_line();
       }
     }
@@ -191,9 +192,9 @@ class Navigation {
     
 
     void parse_string_choreography(String choreography){
-      Serial.println("entering parse_string_choreography");
+      //Serial.println("entering parse_string_choreography");
       choreography.toLowerCase();
-      Serial.println("creating parser");
+      //Serial.println("creating parser");
       ChoreographyParser parser = ChoreographyParser();
       parser.parse(choreography);
     }
@@ -213,19 +214,6 @@ class Navigation {
       // Serial.println(choreography_0);
       // parse_string_choreography(choreography_0);
 
-      parsed_timesteps[0] = 0;
-      parsed_timesteps[1] = 10000;
-      parsed_timesteps[2] = 20000;
-      parsed_timesteps[3] = 30000;
-      parsed_timesteps[4] = 40000;
-
-      parsed_instructions[0] = NAVIGATION_LEFT;
-      parsed_instructions[1] = NAVIGATION_STRAIGHT;
-      parsed_instructions[2] = NAVIGATION_STRAIGHT;
-      parsed_instructions[3] = NAVIGATION_BACK;
-      parsed_instructions[4] = NAVIGATION_RIGHT;
-
-      number_of_steps = 5;
 
     }
     // returns the total number of available preloaded choreographies
@@ -257,9 +245,13 @@ class Navigation {
     
     // move navigation to next instruction
     // signal that the navigation on this cross was completed and update the orientation
+    // returns false if the whole sequence is completed
     bool move_to_next_instruction(){
-      if(current_step < number_of_steps){
+      if(current_step < (number_of_steps -1)){
         current_step++;
+        return true;
+      } else {
+        return false;
       }
     }
 };
@@ -368,35 +360,39 @@ void set_velocities() {
 }
 
 void turn_90_left() {
+  left_wheel_velocity = -25;
+  right_wheel_velocity = 25;
+  set_velocities();
+
   // Rotate till the middle sensor sees black
   bool turn_complete = false;
-  bool close_to_end = false;
+  bool check = true;
   while (!turn_complete) {
-    turnLeft();
-    if (middle_right == BLACK) {
-      close_to_end = true;
-    }
-    if (close_to_end && middle == BLACK) {
+    read_inputs();
+    if (middle_left == BLACK) {
+      delay(250);
+      stopCargo();
       turn_complete = true;
     }
   }
-  stopCargo();
 }
 
 void turn_90_right() {
+  left_wheel_velocity = 25;
+  right_wheel_velocity = -25;
+  set_velocities();
+
   // Rotate till the middle sensor sees black
   bool turn_complete = false;
-  bool close_to_end = false;
+  bool check = true;
   while (!turn_complete) {
-    turnRight();
-    if (middle_left == BLACK) {
-      close_to_end = true;
-    }
-    if (close_to_end && middle == BLACK) {
+    read_inputs();
+    if (middle_right == BLACK) {
+      delay(250);
+      stopCargo();
       turn_complete = true;
     }
   }
-  stopCargo();
 }
 
 void turn_back() {
@@ -413,23 +409,23 @@ void turn_back() {
 void control_waiting_start(){
   stopCargo();
   // if BUTTON == LOW
-  if (button == 0) {
-    state = STATE_GO_TO_NEXT_CROSSING;
+  if (button == 1) {
     start_dance_time = millis();
+    state = STATE_GO_TO_NEXT_CROSSING;
   }
 }
 
-void control_go_to_next_crossing(unsigned long current_time){
+void control_go_to_next_crossing(){
 
   // Go straight for some time to be centered on the cross.
   if (border_left == BLACK || border_right == BLACK) {
-    int previous_time = current_time;
+    int previous_time = millis();
     bool cargo_centered = false;
     while (!cargo_centered) {
       straight();
 
-      // Loop straight() for 500 milliseconds, then change state
-      if (current_time-previous_time > 500) {
+      // Loop straight() for 250 milliseconds, then change state
+      if (millis()-previous_time > 250) {
         state = STATE_NAVIGATION_ON_CROSSING;
         cargo_centered = true;
       }
@@ -437,35 +433,43 @@ void control_go_to_next_crossing(unsigned long current_time){
   }
   
   if (middle_left == BLACK) {
-    turn_slightly_left();
+    //turn_slightly_left();
+    turnLeft();
   } else if (middle_right == BLACK) {
-    turn_slightly_right();
+    //turn_slightly_right();
+    turnRight();
   } else {
     straight();
   }
 }
 
 void control_navigation_on_crossing(unsigned long current_time){
+  /*
   int timestamp = nav.get_cross_leave_time();
   if (timestamp > current_time) {
     delay(timestamp - current_time);
   }
-
+  */
   int instruction = nav.get_cross_direction();
-  switch(instruction) {
-    case NAVIGATION_LEFT:
-      turn_90_left();
-      break;
-    case NAVIGATION_RIGHT:
-      turn_90_right();
-      break;
-    case NAVIGATION_STRAIGHT:
-      break;
-    case NAVIGATION_BACK:
-      turn_back();
-      break;
+
+  if (!nav.move_to_next_instruction()) {
+    switch(instruction) {
+      case NAVIGATION_LEFT:
+        turn_90_left();
+        break;
+      case NAVIGATION_RIGHT:
+        turn_90_right();
+        break;
+      case NAVIGATION_STRAIGHT:
+        break;
+      case NAVIGATION_BACK:
+        turn_back();
+        break;
+    }
+    state = STATE_GO_TO_NEXT_CROSSING;
+  } else {
+    state = STATE_FINAL;
   }
-  state = STATE_GO_TO_NEXT_CROSSING;
 }
 
 void control_final() {
@@ -479,7 +483,7 @@ void control(unsigned long current_time) {
       control_waiting_start();
       return;
     case STATE_GO_TO_NEXT_CROSSING:
-      control_go_to_next_crossing(current_time);
+      control_go_to_next_crossing();
       return;
     case STATE_NAVIGATION_ON_CROSSING:
       control_navigation_on_crossing(current_time);
@@ -495,5 +499,4 @@ void loop() {
   read_inputs();
   current_time = millis()-start_dance_time;
   control(current_time);
-  delay(10);
 }
