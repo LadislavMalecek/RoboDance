@@ -1,7 +1,7 @@
 #include <Servo.h>
 
 bool serialLog = false;
-bool dummyNavigation = true;
+bool dummyNavigation = false;
 
 class Motor : public Servo {
   private:
@@ -478,7 +478,7 @@ class Navigation {
     // what to do on the current cross
     byte get_cross_direction(){
       if(dummyNavigation){
-        return NAVIGATION_LEFT;
+        return NAVIGATION_BACK;
       }
       // return parsed_instructions[current_step];
       return get_move_robot_local_direction();   
@@ -516,7 +516,7 @@ class Navigation {
 // ----------------------------------- ROBOT ----------------------------------
 // ----------------------------------------------------------------------------
 
-#define LEFT -1
+#define LEFT 0
 #define RIGHT 1
 
 #define BLACK 0
@@ -627,11 +627,11 @@ class Robot {
     void move_left(){ set_velocities(0, 25); }
     void move_right(){ set_velocities(25, 0); }
 
-    void turn_slightly_left(){ set_velocities(25, 50); }
-    void turn_slightly_right(){ set_velocities(50, 25); }
+    void move_slightly_left(){ set_velocities(20, 50); }
+    void move_slightly_right(){ set_velocities(50, 20); }
 
-    void rotate_on_spot_left(){ set_velocities(-25, 25); }
-    void rotate_on_spot_right(){ set_velocities(25, -25); }
+    void move_rotate_on_spot_left(){ set_velocities(-25, 25); }
+    void move_rotate_on_spot_right(){ set_velocities(25, -25); }
 };
 
 
@@ -651,8 +651,9 @@ class Robot {
 Navigation navigation;
 Robot robot;
 
-unsigned long current_time = 0;
 unsigned long start_dance_time = 0;
+bool turn_already_seen_border_black = false;
+byte turn_around_counter = 0;
 
 byte cross_border_side = LEFT;
 int state = STATE_WAITING_START;
@@ -693,188 +694,155 @@ int state = STATE_WAITING_START;
 void setup() {
   navigation.init_preload_choreography();
   robot.initialize();
-  while(true){
-    robot.rotate_on_spot_left();
-    delay(2000);
-    robot.rotate_on_spot_right();
-    delay(2000);
+}
+
+void control_waiting_start(){
+  robot.move_stop();
+  // if BUTTON == LOW
+  if (robot.is_button_pressed()) {
+    start_dance_time = millis();
+    state = STATE_NAVIGATION_ON_CROSSING;
+  }
+}
+
+void control_go_to_next_crossing(unsigned int current_time){
+  int timestamp = navigation.get_cross_leave_time();
+  // delay if the navigation say so
+  if (timestamp > current_time) {
+    return;
+  }
+  // Go straight for some time to be centered on the cross.
+  // did we encountered a cross?
+  if(robot.is_border_left_black() && robot.is_middle_left_black()){
+    control_go_to_next_crossing_border_met(LEFT);
+    return;
+  }
+  if(robot.is_border_right_black() && robot.is_middle_right_black()){
+    control_go_to_next_crossing_border_met(RIGHT);
+    return;
+  }
+  
+  // normal movement
+  if (robot.is_middle_left_black()) {
+    robot.move_slightly_left();
+    return;
+  }
+  if (robot.is_middle_right_black()) {
+    robot.move_slightly_right();
+    return;
+  }
+
+  robot.move_straight();
+}
+
+void control_go_to_next_crossing_border_met(byte which_side_border_encountered){
+  cross_border_side = which_side_border_encountered;
+  
+  // move a little forward to center the robot above the crossing
+  robot.move_straight();
+  delay(250);
+  robot.move_stop();
+  
+  //we reached new crossing, ask the navigation for new instructions
+  bool success = navigation.move_to_next_instruction();
+
+  turn_already_seen_border_black = false;
+  turn_around_counter = 0;
+  state = STATE_NAVIGATION_ON_CROSSING;
+  
+  if(!success){
+    // we reached the end of the navigation instructions
+    state = STATE_FINAL;
+    return;
+  }
+}
+
+void control_navigation_on_crossing(){
+  byte instruction = navigation.get_cross_direction();
+  bool finished = false;
+  switch(instruction) {
+    case NAVIGATION_LEFT:
+      finished = control_navigation_on_crossing_turn(LEFT);
+      break;
+    case NAVIGATION_RIGHT:
+      finished = control_navigation_on_crossing_turn(RIGHT);
+      break;
+    case NAVIGATION_STRAIGHT:
+      finished = true;
+      break;
+    case NAVIGATION_BACK:
+      finished = control_navigation_on_crossing_turn_around(cross_border_side);
+      break;
+  }
+  if(finished){
+    state = STATE_GO_TO_NEXT_CROSSING;
+  }
+}
+
+// returns true if finished
+bool control_navigation_on_crossing_turn(byte direction) {
+  // Rotate till the middle sensor sees black  
+  if(robot.is_middle_black() && turn_already_seen_border_black) {
+    robot.move_stop();
+    return true;
+  }
+  
+  if(!turn_already_seen_border_black && (robot.is_border_left_black() || robot.is_border_right_black())){
+    turn_already_seen_border_black = true;
+  }
+
+  if(direction == LEFT){
+    robot.move_rotate_on_spot_left();
+    return false;
+  }
+  if(direction == RIGHT){
+    robot.move_rotate_on_spot_right();
+    return false;
+  }
+}
+
+bool control_navigation_on_crossing_turn_around(byte direction){
+  if(turn_around_counter >= 2){
+    robot.led_off();
+    return true;
+  }
+  bool one_turn_finished = control_navigation_on_crossing_turn(direction);
+  if(one_turn_finished){
+    robot.led_on();
+    turn_around_counter++;
+    turn_already_seen_border_black = false;
+  }
+  return false;
+}
+
+
+void control_final() {
+  robot.move_stop();
+}
+
+
+void control(unsigned long current_time) {
+  switch(state){
+    case STATE_WAITING_START:
+      control_waiting_start();
+      return;
+    case STATE_GO_TO_NEXT_CROSSING:
+      control_go_to_next_crossing(current_time);
+      return;
+    case STATE_NAVIGATION_ON_CROSSING:
+      control_navigation_on_crossing();
+      return;
+    case STATE_FINAL:
+      control_final();
+      return;
   }
 }
 
 
-void turn_90_left() {
-  // left_wheel_velocity = -25;
-  // right_wheel_velocity = 25;
-  // set_velocities();
-
-  // // Rotate till the middle sensor sees black
-  // bool turn_complete = false;
-  // bool check = true;
-  // while (!turn_complete) {
-  //   read_inputs();
-  //   if (middle_left == BLACK) {
-  //     delay(300);
-  //     stopCargo();
-  //     turn_complete = true;
-  //   }
-  // }
-}
-
-
-void turn_90_right() {
-  // left_wheel_velocity = 25;
-  // right_wheel_velocity = -25;
-  // set_velocities();
-
-  // // Rotate till the middle sensor sees black
-  // bool turn_complete = false;
-  // bool check = true;
-  // while (!turn_complete) {
-  //   read_inputs();
-  //   if (middle_right == BLACK) {
-  //     delay(300);
-  //     stopCargo();
-  //     turn_complete = true;
-  //   }
-  // }
-}
-
-
-void rotate() {
-  // Rotate till the middle sensor sees black
-
-  // digitalWrite(LED, LOW);
-  // bool close_to_end = false;
-  // while (!turn_complete) {
-  //   read_inputs();
-  //   if (!close_to_end) {
-  //     if (middle == WHITE) {
-  //       close_to_end = true;
-  //     }
-  //   } else if (middle == BLACK) {
-  //     stopCargo();
-  //     // turn_complete = true;
-  //   }
-  // }
-  // delay(500);
-  // while (true) {
-  //   read_inputs();
-  //   if (middle == BLACK) {
-  //     digitalWrite(LED, HIGH);
-  //     stopCargo();
-  //     break;
-  //   }
-  // }
-}
-
-
-// void turn_back() {
-//   turn_90_left();
-//   turn_90_left();
-//   stopCargo();
-// }
-
-// void control_waiting_start(){
-//   stopCargo();
-//   // if BUTTON == LOW
-//   if (button == 1) {
-//     start_dance_time = millis();
-//     state = STATE_NAVIGATION_ON_CROSSING;
-//   }
-// }
-
-// void control_go_to_next_crossing(){
-
-//   // Go straight for some time to be centered on the cross.
-//   if (border_left == BLACK || border_right == BLACK) {
-//     if(border_left == BLACK){
-//       cross_border_side = LEFT;
-//     } else {
-//       cross_border_side = RIGHT;
-//     }
-//     straight();
-//     delay(250);
-
-//     if(cross_border_side == LEFT){
-//       turnLeft();
-//     } else {
-//       turnRight();
-//     }
-//     delay(250);
-//     stopCargo();
-
-//     // state = STATE_NAVIGATION_ON_CROSSING;
-//     state = STATE_FINAL;
-//     ledState = HIGH;
-//     //we reached new crossing, ask the navigation for new instructions
-//     bool success = navigation.move_to_next_instruction();
-//     if(!success){
-//       // we reached the end of the navigation instructions
-//       state = STATE_FINAL;
-//       return;
-//     }
-//   }
-  
-//   if (middle_left == BLACK) {
-//     turn_slightly_left();
-//     // turnLeft();
-//   } else if (middle_right == BLACK) {
-//     turn_slightly_right();
-//     // turnRight();
-//   } else {
-//     straight();
-//   }
-// }
-
-// void control_navigation_on_crossing(unsigned long current_time){
-//   int timestamp = navigation.get_cross_leave_time();
-//   if (timestamp > current_time) {
-//     delay(timestamp - current_time);
-//   }
-
-//   int instruction = navigation.get_cross_direction();
-
-//   switch(instruction) {
-//     case NAVIGATION_LEFT:
-//       turn_90_left();
-//       break;
-//     case NAVIGATION_RIGHT:
-//       turn_90_right();
-//       break;
-//     case NAVIGATION_STRAIGHT:
-//       break;
-//     case NAVIGATION_BACK:
-//       turn_back();
-//       break;
-//   }
-//   state = STATE_GO_TO_NEXT_CROSSING;
-// }
-
-// void control_final() {
-//   stopCargo();
-// }
-
-
-// void control(unsigned long current_time) {
-//   switch(state){
-//     case STATE_WAITING_START:
-//       control_waiting_start();
-//       return;
-//     case STATE_GO_TO_NEXT_CROSSING:
-//       control_go_to_next_crossing();
-//       return;
-//     case STATE_NAVIGATION_ON_CROSSING:
-//       control_navigation_on_crossing(current_time);
-//       return;
-//     case STATE_FINAL:
-//       control_final();
-//       return;
-//   }
-// }
-
-
 void loop() {
-  // read_inputs();
-  // current_time = millis()-start_dance_time;
-  // control(current_time);
+  robot.refresh_inputs();
+  unsigned int current_time = millis() - start_dance_time;
+  control(current_time);
+  // the operation speed of the robot 1000 / 10 per second
+  delay(10);
 }
