@@ -100,8 +100,10 @@ class ChoreographyParser {
     String choreography = "";
 
     void skip_newline_chars(){
-      while(choreography[current_string_possition] == '\n' || choreography[current_string_possition] == '\r'){
+      char current = choreography[current_string_possition];
+      while(current == '\n' || current == '\r' || current == '\t' || current == ',' || current == ';'){
         current_string_possition++;
+        current = choreography[current_string_possition]; 
       }
     }
 
@@ -187,7 +189,8 @@ class ChoreographyParser {
         // Serial.println("X");
         // Serial.println("Current char: " + choreography[current_string_possition]);
         // parse with \n \r, skip the trailing ones
-        if(choreography[current_string_possition] == '\n' || choreography[current_string_possition] == '\r'){
+        char current = choreography[current_string_possition];
+        if(current == '\n' || current == '\r' || current == '\t'|| current == ',' || current == ';'){
           end_possition = current_string_possition - 1;
           skip_newline_chars();
           break;
