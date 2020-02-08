@@ -601,8 +601,8 @@ class Robot {
     byte led_state(){
       return _led_state;
     }
-    byte button_state(){
-      return _button_state;
+    bool is_button_pressed(){
+      return _button_state == 0;
     }
 
 
