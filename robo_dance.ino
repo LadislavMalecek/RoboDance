@@ -452,21 +452,12 @@ class Navigation {
     }
     
   public:
-
     void init_preload_choreography(){
-      init_preload_choreography(0);
+      String preloaded_choreography = "B2S,c2 t100,d2 t200,b5 t300,e2 t400,d2 t500,c2 t0,b2 t600";
+      parse_string_choreography(preloaded_choreography);
     }
-    void init_preload_choreography(int i){
-      String choreography_0 = "B2S,c2 t100,d2 t200,b5 t300,e2 t400,d2 t500,c2 t0,b2 t600";
-      // String choreography_0 = "A1N\n3a t30\nb2 t60\nc4 t90\nd3 t120\ne5 t180";
-      parse_string_choreography(choreography_0);
-    }
-    // returns the total number of available preloaded choreographies
-    int number_of_preloaded_choreographies(){
-      return 1;
-    }
-    void init_load_choreography_from_serial(String choreography){
-      return;
+    void init_load_choreography_from_string(String choreography){
+      parse_string_choreography(choreography);
     }
 
 
@@ -646,6 +637,7 @@ class Robot {
 #define STATE_NAVIGATION_ON_CROSSING 2
 #define STATE_FINAL 3
 #define STATE_NORMAL_OPERATION 4
+#define STATE_CHECK_IF_VALID 5
 
 
 Navigation navigation;
@@ -654,6 +646,7 @@ Robot robot;
 unsigned long start_dance_time = 0;
 bool turn_already_seen_border_black = false;
 byte turn_around_counter = 0;
+unsigned long start_of_check_if_valid = 0;
 
 byte cross_border_side = LEFT;
 int state = STATE_WAITING_START;
@@ -692,11 +685,12 @@ int state = STATE_WAITING_START;
 
 
 void setup() {
-  navigation.init_preload_choreography();
+  String choreography = "A1N,a2 t30,a3 t60,a2 t100";
+  navigation.init_load_choreography_from_string(choreography);
   robot.initialize();
 }
 
-void control_waiting_start(){
+void control_waiting_start(unsigned long current_time){
   robot.move_stop();
   // if BUTTON == LOW
   if (robot.is_button_pressed()) {
@@ -757,7 +751,7 @@ void control_go_to_next_crossing_border_met(byte which_side_border_encountered){
   }
 }
 
-void control_navigation_on_crossing(){
+void control_navigation_on_crossing(unsigned long current_time){
   byte instruction = navigation.get_cross_direction();
   bool finished = false;
   switch(instruction) {
@@ -775,7 +769,8 @@ void control_navigation_on_crossing(){
       break;
   }
   if(finished){
-    state = STATE_GO_TO_NEXT_CROSSING;
+    start_of_check_if_valid = current_time;
+    state = STATE_CHECK_IF_VALID;
   }
 }
 
@@ -815,6 +810,29 @@ bool control_navigation_on_crossing_turn_around(byte direction){
   return false;
 }
 
+void control_check_if_valid(unsigned long current_time){
+  if(robot.is_middle_left_black() || robot.is_middle_right_black() || robot.is_middle_black()){
+    state = STATE_GO_TO_NEXT_CROSSING;
+    return;
+  }
+
+  if(current_time < start_of_check_if_valid + 50){
+    robot.move_rotate_on_spot_left();
+    return;
+  }
+  if(current_time < start_of_check_if_valid + 150){
+    robot.move_rotate_on_spot_right();
+    return;
+  }
+  if(current_time < start_of_check_if_valid + 200){
+    robot.move_rotate_on_spot_left();
+    return;
+  }
+  // it is after the 400ms and we didn't encounter any black, therefore we stop;
+  robot.move_stop();
+  state = STATE_FINAL;
+}
+
 
 void control_final() {
   robot.move_stop();
@@ -824,13 +842,16 @@ void control_final() {
 void control(unsigned long current_time) {
   switch(state){
     case STATE_WAITING_START:
-      control_waiting_start();
+      control_waiting_start(current_time);
       return;
     case STATE_GO_TO_NEXT_CROSSING:
       control_go_to_next_crossing(current_time);
       return;
     case STATE_NAVIGATION_ON_CROSSING:
-      control_navigation_on_crossing();
+      control_navigation_on_crossing(current_time);
+      return;
+    case STATE_CHECK_IF_VALID:
+      control_check_if_valid(current_time);
       return;
     case STATE_FINAL:
       control_final();
