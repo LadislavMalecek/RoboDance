@@ -75,17 +75,6 @@ class ChoreographyParser {
   // direciton 2 represents SOUTH
   // direciton 3 represents EAST
   private:
-    // unsigned int next_orientation = 0;
-    // unsigned int next_possition_x = 0;
-    // unsigned int next_possition_y = 0;
-
-    // int next_time = 0;
-    // bool preffer_column = true;
-
-    // unsigned int current_orientation = 0;
-    // unsigned int current_possition_x = 0;
-    // unsigned int current_possition_y = 0;
-
     byte number_of_instructions = 0;
 
     byte instructions_direction_x[64];
@@ -108,12 +97,6 @@ class ChoreographyParser {
       }
     }
 
-    // void copy_next_to_current(){
-    //   current_orientation = next_orientation;
-    //   current_possition_x = next_possition_x;
-    //   current_possition_y = next_possition_y;
-    // }
-
     void parse_first_line(String line){
       start_x = line[0] - 'a';
       start_y = line[1] - '1';
@@ -122,38 +105,25 @@ class ChoreographyParser {
         case 'n':
         case 'N':
           start_orientation = DIRECTION_NORTH;
-          // Serial.println("Starting possition dir: north");
           break;
         case 'e':
         case 'E':
           start_orientation = DIRECTION_EAST;
-          // Serial.println("Starting possition dir: east");
           break;
         case 's':
         case 'S':
           start_orientation = DIRECTION_SOUTH;
-          // Serial.println("Starting possition dir: south");
           break;
         case 'w':
         case 'W':
           start_orientation = DIRECTION_WEST;
-          // Serial.println("Starting possition dir: west");
           break;
         default:
-          // Serial.println("Invalid starting direction encountered.");
           break;
       }
-      // Serial.println("Starting possition x: " + start_x);
-      // Serial.println("Starting possition y: " + start_y);
-
-      // start_x = next_orientation;
-      // current_possition_x = next_possition_x;
-      // current_possition_y = next_possition_y;
     }
 
     void parse_line(String line){
-      // copy_next_to_current();
-      // check if the first one is number
       if (isdigit(line[0]))
       {
         instructions_preffer_col[number_of_instructions] = false;
@@ -182,14 +152,8 @@ class ChoreographyParser {
       int start_possition = current_string_possition;
       int end_possition = 0;
       
-      // Serial.println("Before cycle");
-      // Serial.println(choreography.length());
-      
       while(choreography.length() - 1 >= current_string_possition){
 
-        // Serial.println("X");
-        // Serial.println("Current char: " + choreography[current_string_possition]);
-        // parse with \n \r, skip the trailing ones
         char current = choreography[current_string_possition];
         if(current == '\n' || current == '\r' || current == '\t'|| current == ',' || current == ';'){
           end_possition = current_string_possition - 1;
@@ -307,6 +271,8 @@ class Navigation {
     int next_time = 0;
     byte next_direction = 0;
     bool next_x_first = true;
+
+    bool returning_back = false;
     
     bool move_to_next_parser_instruction(){
       if(serialLog){
@@ -338,6 +304,13 @@ class Navigation {
         Serial.println(next_x_first);
       }
       return true;
+    }
+
+    void set_destination_to_start_possition(){
+      next_x = parser.get_start_x();
+      next_y = parser.get_start_y();
+      next_time = 0;
+      next_x_first = true;
     }
 
     void parse_string_choreography(String choreography){
@@ -425,6 +398,24 @@ class Navigation {
       return ((dir1 - dir2 + 4) % 4) == 3;
     }
 
+    byte get_move_robot_local_direction(byte robot_direciton, byte desired_direction){
+      if(is_same_direction(robot_direciton, desired_direction)){
+        return NAVIGATION_STRAIGHT;
+      }
+
+      if(is_opposite_direction(robot_direciton, desired_direction)){
+        return NAVIGATION_BACK;
+      }
+
+      if(is_left_direction(robot_direciton, desired_direction)){
+        return NAVIGATION_LEFT;
+      }
+
+      if(is_right_direction(robot_direciton, desired_direction)){
+        return NAVIGATION_RIGHT;
+      }
+    }
+
     byte get_move_robot_local_direction(){
       next_direction = get_move_absolute_direction();
       if(serialLog){
@@ -433,23 +424,9 @@ class Navigation {
         Serial.print(", next direction: ");
         Serial.println(direction_to_string(next_direction));
       }
-
-      if(is_same_direction(current_direction, next_direction)){
-        return NAVIGATION_STRAIGHT;
-      }
-
-      if(is_opposite_direction(current_direction, next_direction)){
-        return NAVIGATION_BACK;
-      }
-
-      if(is_left_direction(current_direction, next_direction)){
-        return NAVIGATION_LEFT;
-      }
-
-      if(is_right_direction(current_direction, next_direction)){
-        return NAVIGATION_RIGHT;
-      }
+      return get_move_robot_local_direction(current_direction, next_direction);
     }
+
     
   public:
     void init_preload_choreography(){
@@ -492,10 +469,43 @@ class Navigation {
         return true;
       }
       update_possition();
+
+      if(returning_back){
+        if(is_finished_current_parser_instruction()){
+          // we successfully returned back
+          return false;
+        }
+        return true;
+      }
+
       if(is_finished_current_parser_instruction()){
         return move_to_next_parser_instruction();
       }
       return true;
+    }
+
+    void set_to_navigate_to_starting_possition(){
+      returning_back = true;
+      set_destination_to_start_possition();
+      // next_x = parser.get_start_x;
+      // next_y = parser.get_start_y;
+      // next_direction = parser.get_start_orientation;
+    }
+
+    byte get_final_rotation_after_finish(){
+      if(returning_back){
+        return get_move_robot_local_direction(current_direction, parser.get_start_orientation());
+      }
+      return NAVIGATION_STRAIGHT;
+    }
+
+    void reset(){
+      returning_back = false;
+      current_x = parser.get_start_x();
+      current_y = parser.get_start_y();
+      current_direction = parser.get_start_orientation();
+      current_parser_instruction = -1;
+      move_to_next_parser_instruction();
     }
 };
 
@@ -524,6 +534,7 @@ class Robot {
     byte _border_left = 0;
     byte _border_right = 0;
 
+    byte _previous_button_state = 0;
     byte _button_state = 0;
     byte _led_state = HIGH;
 
@@ -543,6 +554,7 @@ class Robot {
       _middle_right = digitalRead(_pin_middle_right_sensor);
       _border_left = digitalRead(_pin_border_left_sensor);
       _border_right = digitalRead(_pin_border_right_sensor);
+      _previous_button_state = _button_state;
       _button_state = digitalRead(_pin_button);
     }
 
@@ -593,7 +605,7 @@ class Robot {
       return _led_state;
     }
     bool is_button_pressed(){
-      return _button_state == 0;
+      return _previous_button_state == 1 && _button_state == 0;
     }
 
 
@@ -633,11 +645,12 @@ class Robot {
 
 
 #define STATE_WAITING_START 0
+
 #define STATE_GO_TO_NEXT_CROSSING 1
 #define STATE_NAVIGATION_ON_CROSSING 2
 #define STATE_FINAL 3
-#define STATE_NORMAL_OPERATION 4
-#define STATE_CHECK_IF_VALID 5
+#define STATE_CHECK_IF_VALID 4
+#define STATE_FINAL_ROTATION 5
 
 
 Navigation navigation;
@@ -647,6 +660,9 @@ unsigned long start_dance_time = 0;
 bool turn_already_seen_border_black = false;
 byte turn_around_counter = 0;
 unsigned long start_of_check_if_valid = 0;
+
+bool return_back_initiated = false;
+bool we_are_returning = false;
 
 byte cross_border_side = LEFT;
 int state = STATE_WAITING_START;
@@ -685,15 +701,18 @@ int state = STATE_WAITING_START;
 
 
 void setup() {
-  String choreography = "A1N,a2 t30,a3 t60,a2 t100";
+  String choreography = "A1N,b1 t0,b2 t0,a2 t0,b4 t0";
   navigation.init_load_choreography_from_string(choreography);
   robot.initialize();
 }
 
 void control_waiting_start(unsigned long current_time){
   robot.move_stop();
+  we_are_returning = false;
+  return_back_initiated = false;
   // if BUTTON == LOW
   if (robot.is_button_pressed()) {
+    navigation.reset();
     start_dance_time = millis();
     state = STATE_NAVIGATION_ON_CROSSING;
   }
@@ -738,6 +757,13 @@ void control_go_to_next_crossing_border_met(byte which_side_border_encountered){
   robot.move_stop();
   
   //we reached new crossing, ask the navigation for new instructions
+
+  if(return_back_initiated && !we_are_returning){
+    we_are_returning = true;
+    robot.led_on();
+    navigation.set_to_navigate_to_starting_possition();
+  }
+
   bool success = navigation.move_to_next_instruction();
 
   turn_already_seen_border_black = false;
@@ -746,13 +772,22 @@ void control_go_to_next_crossing_border_met(byte which_side_border_encountered){
   
   if(!success){
     // we reached the end of the navigation instructions
-    state = STATE_FINAL;
+    if(we_are_returning){
+      state = STATE_FINAL_ROTATION;
+    } else {
+      state = STATE_FINAL;
+    }
     return;
   }
 }
 
-void control_navigation_on_crossing(unsigned long current_time){
-  byte instruction = navigation.get_cross_direction();
+void control_navigation_on_crossing(unsigned long current_time, bool is_final_rotation){
+  byte instruction;
+  if(is_final_rotation){
+    instruction = navigation.get_final_rotation_after_finish();
+  } else {
+    instruction = navigation.get_cross_direction();
+  }
   bool finished = false;
   switch(instruction) {
     case NAVIGATION_LEFT:
@@ -768,10 +803,20 @@ void control_navigation_on_crossing(unsigned long current_time){
       finished = control_navigation_on_crossing_turn_around(cross_border_side);
       break;
   }
-  if(finished){
+  if(!finished){
+    return;
+  }
+  if(!is_final_rotation){
+    // normal operation
     start_of_check_if_valid = current_time;
     state = STATE_CHECK_IF_VALID;
+    return;
   }
+  
+  // last rotation state when returning
+  robot.led_off();
+  // we were returning back, therefore reset as if we were at the begining
+  state = STATE_WAITING_START;
 }
 
 // returns true if finished
@@ -798,12 +843,10 @@ bool control_navigation_on_crossing_turn(byte direction) {
 
 bool control_navigation_on_crossing_turn_around(byte direction){
   if(turn_around_counter >= 2){
-    robot.led_off();
     return true;
   }
   bool one_turn_finished = control_navigation_on_crossing_turn(direction);
   if(one_turn_finished){
-    robot.led_on();
     turn_around_counter++;
     turn_already_seen_border_black = false;
   }
@@ -835,7 +878,18 @@ void control_check_if_valid(unsigned long current_time){
 
 
 void control_final() {
+  if(return_back_initiated){
+    navigation.set_to_navigate_to_starting_possition();
+    state = STATE_NAVIGATION_ON_CROSSING;
+  }
   robot.move_stop();
+}
+
+
+void check_and_set_return_back_initiated(){
+  if(robot.is_button_pressed()){
+    return_back_initiated = true;
+  }
 }
 
 
@@ -845,15 +899,22 @@ void control(unsigned long current_time) {
       control_waiting_start(current_time);
       return;
     case STATE_GO_TO_NEXT_CROSSING:
+      check_and_set_return_back_initiated();
       control_go_to_next_crossing(current_time);
       return;
     case STATE_NAVIGATION_ON_CROSSING:
-      control_navigation_on_crossing(current_time);
+      check_and_set_return_back_initiated();
+      control_navigation_on_crossing(current_time, false);
       return;
     case STATE_CHECK_IF_VALID:
+      check_and_set_return_back_initiated();
       control_check_if_valid(current_time);
       return;
+    case STATE_FINAL_ROTATION:
+      control_navigation_on_crossing(current_time, true);
+      return;
     case STATE_FINAL:
+      check_and_set_return_back_initiated();
       control_final();
       return;
   }
