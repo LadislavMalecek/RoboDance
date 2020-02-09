@@ -1,4 +1,5 @@
 #include <Servo.h>
+#include <EEPROM.h>
 
 bool serialLog = false;
 bool dummyNavigation = false;
@@ -79,13 +80,13 @@ class ChoreographyParser {
 
     byte instructions_direction_x[64];
     byte instructions_direction_y[64];
-    int instructions_time[64];
+    unsigned int instructions_time[64];
     bool instructions_preffer_col[64];
 
     byte start_x, start_y = 0;
     byte start_orientation = 0;
 
-    unsigned int current_string_possition = 0;
+    unsigned long current_string_possition = 0;
 
     String choreography = "";
 
@@ -144,7 +145,7 @@ class ChoreographyParser {
         Serial.println(line.substring(4, line.length()).toInt());
       }
 
-      instructions_time[number_of_instructions] = line.substring(4, line.length()).toInt();
+      instructions_time[number_of_instructions] = (unsigned int)line.substring(4, line.length()).toInt();
       number_of_instructions++;
     }
 
@@ -236,8 +237,8 @@ class ChoreographyParser {
     bool get_instructions_pref_col(byte i){
       return instructions_preffer_col[i];
     }
-    int get_instructions_time(byte i){
-      return instructions_time[i];
+    unsigned long get_instructions_time(byte i){
+      return ((unsigned long)instructions_time[i]) * ((unsigned int) 100);
     }
 };
 
@@ -268,7 +269,7 @@ class Navigation {
 
     byte next_x = 0;
     byte next_y = 0;
-    int next_time = 0;
+    unsigned long next_time = 0;
     byte next_direction = 0;
     bool next_x_first = true;
 
@@ -454,7 +455,7 @@ class Navigation {
 
     // returns the absolute timestamp in miliseconds
     // get the time at which we should leave the current cross
-    int get_cross_leave_time(){
+    unsigned long get_cross_leave_time(){
       if(dummyNavigation){
         return 0;
       }
@@ -656,10 +657,10 @@ class Robot {
 Navigation navigation;
 Robot robot;
 
-unsigned long start_dance_time = 0;
+int start_dance_time = 0;
 bool turn_already_seen_border_black = false;
 byte turn_around_counter = 0;
-unsigned long start_of_check_if_valid = 0;
+int start_of_check_if_valid = 0;
 
 bool return_back_initiated = false;
 bool we_are_returning = false;
@@ -667,47 +668,100 @@ bool we_are_returning = false;
 byte cross_border_side = LEFT;
 int state = STATE_WAITING_START;
 
-// void printout_choreography_execute(){
-//   bool finished = false;
-//   Serial.println("Local instructions:");
+void printout_choreography_execute(){
+  bool finished = false;
+  Serial.println("Local instructions:");
 
-//   while(!finished){
-//     byte direction = navigation.get_cross_direction();
-//     int time = navigation.get_cross_leave_time();
-//     if(serialLog){
-//       switch (direction){
-//         case NAVIGATION_STRAIGHT:
-//           Serial.print("straight");
-//           break;
-//         case NAVIGATION_BACK:
-//           Serial.print("back");
-//           break;
-//         case NAVIGATION_LEFT:
-//           Serial.print("left");
-//           break;
-//         case NAVIGATION_RIGHT:
-//           Serial.print("right");
-//           break;
-//         default:
-//           Serial.println("ERROR");
-//           break;
-//       }
-//       Serial.print(", time: ");
-//       Serial.println(time);
-//     }
-//     finished = !navigation.move_to_next_instruction();
-//   }
-// }
+  while(!finished){
+    byte direction = navigation.get_cross_direction();
+    unsigned long time = navigation.get_cross_leave_time();
+    // if(serialLog){
+      switch (direction){
+        case NAVIGATION_STRAIGHT:
+          Serial.print("straight");
+          break;
+        case NAVIGATION_BACK:
+          Serial.print("back");
+          break;
+        case NAVIGATION_LEFT:
+          Serial.print("left");
+          break;
+        case NAVIGATION_RIGHT:
+          Serial.print("right");
+          break;
+        default:
+          Serial.println("ERROR");
+          break;
+      }
+      Serial.print(", time: ");
+      Serial.println(time);
+    // }
+    finished = !navigation.move_to_next_instruction();
+  }
+}
+
+bool save_choreography_to_persistent(String data){
+  int _size = data.length();
+  if(_size > 128){
+    return false;
+  }
+  int i;
+  for(i = 0; i < _size; i++){
+    EEPROM.write(i, data[i]);
+  }
+  EEPROM.write(_size,'\0');   //Add termination null character for String Data
+  return true;
+}
+
+String load_choreography_from_persistent(){
+  if(EEPROM.length() == 0){
+    return "";
+  }
+  char data[128];
+  int i = 0;
+  int possition = 0;
+  unsigned char character;
+  character = EEPROM.read(0);
+  while(character != '\0' && possition < 128){
+    character = EEPROM.read(possition);
+    data[possition] = character;
+    possition++;
+  }
+  data[possition] = '\0';
+  return String(data);
+}
+
+void read_choreography_from_serial_if_available(){
+  // Serial.println("BLE");
+  if(Serial.available()){
+    String choreography = Serial.readString();
+    if(choreography == "" || choreography == " "){
+      Serial.println("invalid choreography");
+    }
+    bool success = save_choreography_to_persistent(choreography);
+    if(success){
+      Serial.println("Choreography saved to eeprom.");
+      Serial.println("Initializing choreography: ");
+      Serial.println(choreography);
+      navigation.init_load_choreography_from_string(choreography);
+    } else {
+      Serial.println("Unable to save the choreography. Max length is 128 characters");
+    }
+  }
+}
 
 
 void setup() {
-  String choreography = "A1N,b1 t0,b2 t0,a2 t0,b4 t0";
+  Serial.begin(115200);
+  String choreography = "A1N,b1 t50,b2 t100,a2 t150,b4 t200";
   navigation.init_load_choreography_from_string(choreography);
+  // printout_choreography_execute();
   robot.initialize();
 }
 
 void control_waiting_start(unsigned long current_time){
   robot.move_stop();
+  read_choreography_from_serial_if_available();
   we_are_returning = false;
   return_back_initiated = false;
   // if BUTTON == LOW
@@ -718,8 +772,8 @@ void control_waiting_start(unsigned long current_time){
   }
 }
 
-void control_go_to_next_crossing(unsigned int current_time){
-  int timestamp = navigation.get_cross_leave_time();
+void control_go_to_next_crossing(unsigned long current_time){
+  unsigned long timestamp = navigation.get_cross_leave_time();
   // delay if the navigation say so
   if (timestamp > current_time) {
     return;
@@ -760,7 +814,6 @@ void control_go_to_next_crossing_border_met(byte which_side_border_encountered){
 
   if(return_back_initiated && !we_are_returning){
     we_are_returning = true;
-    robot.led_on();
     navigation.set_to_navigate_to_starting_possition();
   }
 
@@ -814,7 +867,6 @@ void control_navigation_on_crossing(unsigned long current_time, bool is_final_ro
   }
   
   // last rotation state when returning
-  robot.led_off();
   // we were returning back, therefore reset as if we were at the begining
   state = STATE_WAITING_START;
 }
@@ -896,24 +948,30 @@ void check_and_set_return_back_initiated(){
 void control(unsigned long current_time) {
   switch(state){
     case STATE_WAITING_START:
+      robot.led_off();
       control_waiting_start(current_time);
       return;
     case STATE_GO_TO_NEXT_CROSSING:
+      robot.led_on();
       check_and_set_return_back_initiated();
       control_go_to_next_crossing(current_time);
       return;
     case STATE_NAVIGATION_ON_CROSSING:
+      robot.led_on();
       check_and_set_return_back_initiated();
       control_navigation_on_crossing(current_time, false);
       return;
     case STATE_CHECK_IF_VALID:
+      robot.led_on();
       check_and_set_return_back_initiated();
       control_check_if_valid(current_time);
       return;
     case STATE_FINAL_ROTATION:
+      robot.led_on();
       control_navigation_on_crossing(current_time, true);
       return;
     case STATE_FINAL:
+      robot.led_off();
       check_and_set_return_back_initiated();
       control_final();
       return;
@@ -923,7 +981,7 @@ void control(unsigned long current_time) {
 
 void loop() {
   robot.refresh_inputs();
-  unsigned int current_time = millis() - start_dance_time;
+  unsigned long current_time = millis() - start_dance_time;
   control(current_time);
   // the operation speed of the robot 1000 / 10 per second
   delay(10);
